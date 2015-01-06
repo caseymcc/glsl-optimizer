@@ -5,6 +5,7 @@
 #include "ir_optimization.h"
 #include "ir_print_metal_visitor.h"
 #include "ir_print_glsl_visitor.h"
+#include "ir_print_minimize_glsl_visitor.h"
 #include "ir_print_visitor.h"
 #include "ir_stats.h"
 #include "loop_analysis.h"
@@ -562,7 +563,12 @@ glslopt_shader* glslopt_optimize (glslopt_ctx* ctx, glslopt_shader_type type, co
 		if (ctx->target == kGlslTargetMetal)
 			shader->rawOutput = _mesa_print_ir_metal(ir, state, ralloc_strdup(shader, ""), printMode, &shader->uniformsSize);
 		else
-			shader->rawOutput = _mesa_print_ir_glsl(ir, state, ralloc_strdup(shader, ""), printMode);
+		{
+			if(options & kGlslOptionMinimize)
+				shader->rawOutput=_mesa_print_minimize_ir_glsl(ir, state, ralloc_strdup(shader, ""), printMode);
+			else
+				shader->rawOutput=_mesa_print_ir_glsl(ir, state, ralloc_strdup(shader, ""), printMode);
+		}
 	}
 	
 	// Link built-in functions
@@ -603,7 +609,12 @@ glslopt_shader* glslopt_optimize (glslopt_ctx* ctx, glslopt_shader_type type, co
 		if (ctx->target == kGlslTargetMetal)
 			shader->optimizedOutput = _mesa_print_ir_metal(ir, state, ralloc_strdup(shader, ""), printMode, &shader->uniformsSize);
 		else
-			shader->optimizedOutput = _mesa_print_ir_glsl(ir, state, ralloc_strdup(shader, ""), printMode);
+		{
+			if(options & kGlslOptionMinimize)
+				shader->optimizedOutput=_mesa_print_minimize_ir_glsl(ir, state, ralloc_strdup(shader, ""), printMode);
+			else
+				shader->optimizedOutput=_mesa_print_ir_glsl(ir, state, ralloc_strdup(shader, ""), printMode);
+		}
 	}
 
 	shader->status = !state->error;

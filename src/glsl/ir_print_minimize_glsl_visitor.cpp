@@ -21,7 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#include "ir_print_glsl_visitor.h"
+#include "ir_print_minimize_glsl_visitor.h"
 #include "ir_visitor.h"
 #include "glsl_types.h"
 #include "glsl_parser_extras.h"
@@ -30,10 +30,33 @@
 #include "program/hash_table.h"
 #include <math.h>
 #include <limits>
+#include <string>
 
 
 static void print_type(string_buffer& buffer, const glsl_type *t, bool arraySize);
 static void print_type_post(string_buffer& buffer, const glsl_type *t, bool arraySize);
+
+std::string get_varname(int id)
+{
+	char letters[]="abcdefghijklmnopqrstuvwxyz";
+	std::string value;
+
+	int idValue=id-1;
+	int lettersLength=strlen(letters);
+	int divisor=1;
+
+	while(idValue/(divisor*lettersLength) > 0)
+		divisor*=lettersLength;
+	do
+	{
+		int multiplier=idValue/divisor;
+		value.push_back(letters[multiplier]);
+		idValue=idValue-(multiplier*divisor);
+		divisor/=lettersLength;
+	} while(divisor >= 1);
+
+	return value;
+}
 
 static inline const char* get_precision_string (glsl_precision p)
 {
@@ -78,9 +101,9 @@ struct global_print_tracker {
 	bool	main_function_done;
 };
 
-class ir_print_glsl_visitor : public ir_visitor {
+class ir_print_minimize_glsl_visitor : public ir_visitor {
 public:
-	ir_print_glsl_visitor(string_buffer& buf, global_print_tracker* globals_, PrintGlslMode mode_, bool use_precision_, const _mesa_glsl_parse_state* state_)
+	ir_print_minimize_glsl_visitor(string_buffer& buf, global_print_tracker* globals_, PrintGlslMode mode_, bool use_precision_, const _mesa_glsl_parse_state* state_)
 		: buffer(buf)
 		, loopstate(NULL)
 		, inside_loop_body(false)
@@ -95,7 +118,7 @@ public:
 		state = state_;
 	}
 
-	virtual ~ir_print_glsl_visitor()
+	virtual ~ir_print_minimize_glsl_visitor()
 	{
 	}
 
@@ -149,7 +172,7 @@ public:
 
 
 char*
-_mesa_print_ir_glsl(exec_list *instructions,
+_mesa_print_minimize_ir_glsl(exec_list *instructions,
 	    struct _mesa_glsl_parse_state *state,
 		char* buffer, PrintGlslMode mode)
 {
@@ -201,12 +224,12 @@ _mesa_print_ir_glsl(exec_list *instructions,
 				continue;
 		}
 
-		ir_print_glsl_visitor v (str, &gtracker, mode, state->es_shader, state);
+		ir_print_minimize_glsl_visitor v (str, &gtracker, mode, state->es_shader, state);
 		v.loopstate = ls;
 
 		ir->accept(&v);
 		if (ir->ir_type != ir_type_function && !v.skipped_this_ir)
-			str.asprintf_append (";\n");
+			str.asprintf_append (";");
 	}
 	
 	delete ls;
@@ -215,55 +238,67 @@ _mesa_print_ir_glsl(exec_list *instructions,
 }
 
 
-void ir_print_glsl_visitor::indent(void)
+void ir_print_minimize_glsl_visitor::indent(void)
 {
 	if (previous_skipped)
 		return;
 	previous_skipped = false;
 	for (int i = 0; i < indentation; i++)
-		buffer.asprintf_append ("  ");
+		buffer.asprintf_append ("");
 }
 
-void ir_print_glsl_visitor::end_statement_line()
+void ir_print_minimize_glsl_visitor::end_statement_line()
 {
 	if (!skipped_this_ir)
-		buffer.asprintf_append(";\n");
+		buffer.asprintf_append(";");
 	previous_skipped = skipped_this_ir;
 	skipped_this_ir = false;
 }
 
-void ir_print_glsl_visitor::newline_indent()
+void ir_print_minimize_glsl_visitor::newline_indent()
 {
 	if (expression_depth % 4 == 0)
 	{
 		++indentation;
-		buffer.asprintf_append ("\n");
+		buffer.asprintf_append ("");
 		indent();
 	}
 }
-void ir_print_glsl_visitor::newline_deindent()
+void ir_print_minimize_glsl_visitor::newline_deindent()
 {
 	if (expression_depth % 4 == 0)
 	{
 		--indentation;
-		buffer.asprintf_append ("\n");
+		buffer.asprintf_append ("");
 		indent();
 	}
 }
 
 
-void ir_print_glsl_visitor::print_var_name (ir_variable* v)
+void ir_print_minimize_glsl_visitor::print_var_name (ir_variable* v)
 {
-    long id = (long)hash_table_find (globals->var_hash, v);
-	if (!id && v->data.mode == ir_var_temporary)
+	long id = (long)hash_table_find (globals->var_hash, v);
+	if(!id && ((v->data.mode==ir_var_temporary) || 
+		(v->data.mode==ir_var_auto) ||
+		(v->data.mode==ir_var_function_in) ||
+		(v->data.mode==ir_var_function_out) ||
+		(v->data.mode==ir_var_function_inout)))
 	{
         id = ++globals->var_counter;
         hash_table_insert (globals->var_hash, (void*)id, v);
 	}
     if (id)
     {
-        if (v->data.mode == ir_var_temporary)
-            buffer.asprintf_append ("tmpvar_%d", (int)id);
+		if((v->data.mode==ir_var_temporary) ||
+			(v->data.mode==ir_var_auto) ||
+			(v->data.mode==ir_var_function_in)||
+			(v->data.mode==ir_var_function_out)||
+			(v->data.mode==ir_var_function_inout))
+		{
+			std::string tmpVar=get_varname(id);
+
+			buffer.asprintf_append("%s", tmpVar.c_str());
+		}
         else
             buffer.asprintf_append ("%s_%d", v->name, (int)id);
     }
@@ -273,7 +308,7 @@ void ir_print_glsl_visitor::print_var_name (ir_variable* v)
 	}
 }
 
-void ir_print_glsl_visitor::print_precision (ir_instruction* ir, const glsl_type* type)
+void ir_print_minimize_glsl_visitor::print_precision (ir_instruction* ir, const glsl_type* type)
 {
 	if (!this->use_precision)
 		return;
@@ -339,7 +374,7 @@ static void print_type_post(string_buffer& buffer, const glsl_type *t, bool arra
 }
 
 
-void ir_print_glsl_visitor::visit(ir_variable *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_variable *ir)
 {
 	const char *const cent = (ir->data.centroid) ? "centroid " : "";
 	const char *const inv = (ir->data.invariant) ? "invariant " : "";
@@ -413,47 +448,48 @@ void ir_print_glsl_visitor::visit(ir_variable *ir)
 		ir->data.mode != ir_var_function_out &&
 		ir->data.mode != ir_var_function_inout)
 	{
-		buffer.asprintf_append (" = ");
+		buffer.asprintf_append ("=");
 		visit (ir->constant_value);
 	}
 }
 
 
-void ir_print_glsl_visitor::visit(ir_function_signature *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_function_signature *ir)
 {
    print_precision (ir, ir->return_type);
    print_type(buffer, ir->return_type, true);
-   buffer.asprintf_append (" %s (", ir->function_name());
+   buffer.asprintf_append (" %s(", ir->function_name());
 
    if (!ir->parameters.is_empty())
    {
-	   buffer.asprintf_append ("\n");
+//	   buffer.asprintf_append ("\n");
 
-	   indentation++; previous_skipped = false;
+//	   indentation++; 
+	   previous_skipped = false;
 	   bool first = true;
 	   foreach_in_list(ir_variable, inst, &ir->parameters) {
 		  if (!first)
-			  buffer.asprintf_append (",\n");
-		  indent();
+			  buffer.asprintf_append (",");
+//		  indent();
 		  inst->accept(this);
 		  first = false;
 	   }
-	   indentation--;
+//	   indentation--;
 
-	   buffer.asprintf_append ("\n");
-	   indent();
+//	   buffer.asprintf_append ("\n");
+//	   indent();
    }
 
    if (ir->body.is_empty())
    {
-	   buffer.asprintf_append (");\n");
+	   buffer.asprintf_append (");");
 	   return;
    }
 
-   buffer.asprintf_append (")\n");
+   buffer.asprintf_append (")");
 
    indent();
-   buffer.asprintf_append ("{\n");
+   buffer.asprintf_append ("{");
    indentation++; previous_skipped = false;
 	
 	// insert postponed global assigments
@@ -465,7 +501,7 @@ void ir_print_glsl_visitor::visit(ir_function_signature *ir)
 		{
 			ir_instruction* as = node->ir;
 			as->accept(this);
-			buffer.asprintf_append(";\n");
+			buffer.asprintf_append(";");
 		}
 	}
 
@@ -476,10 +512,10 @@ void ir_print_glsl_visitor::visit(ir_function_signature *ir)
    }
    indentation--;
    indent();
-   buffer.asprintf_append ("}\n");
+   buffer.asprintf_append ("}");
 }
 
-void ir_print_glsl_visitor::visit(ir_function *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_function *ir)
 {
    bool found_non_builtin_proto = false;
 
@@ -496,7 +532,7 @@ void ir_print_glsl_visitor::visit(ir_function *ir)
    foreach_in_list(ir_function_signature, sig, &ir->signatures) {
       indent();
       sig->accept(this);
-      buffer.asprintf_append ("\n");
+//      buffer.asprintf_append ("\n");
    }
 
    this->mode = oldMode;
@@ -638,7 +674,7 @@ static bool is_binop_func_like(ir_expression_operation op, const glsl_type* type
 	return false;
 }
 
-void ir_print_glsl_visitor::visit(ir_expression *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_expression *ir)
 {
 	++this->expression_depth;
 	newline_indent();
@@ -679,13 +715,13 @@ void ir_print_glsl_visitor::visit(ir_expression *ir)
 			buffer.asprintf_append ("(");
 		}
 		if (ir->type->is_vector() && (ir->operation >= ir_binop_less && ir->operation <= ir_binop_nequal))
-			buffer.asprintf_append ("%s (", operator_vec_glsl_strs[ir->operation-ir_binop_less]);
+			buffer.asprintf_append ("%s(", operator_vec_glsl_strs[ir->operation-ir_binop_less]);
 		else
-			buffer.asprintf_append ("%s (", operator_glsl_strs[ir->operation]);
+			buffer.asprintf_append ("%s(", operator_glsl_strs[ir->operation]);
 		
 		if (ir->operands[0])
 			ir->operands[0]->accept(this);
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		if (ir->operands[1])
 			ir->operands[1]->accept(this);
 		buffer.asprintf_append (")");
@@ -698,7 +734,7 @@ void ir_print_glsl_visitor::visit(ir_expression *ir)
 		if (ir->operands[0])
 			ir->operands[0]->accept(this);
 
-		buffer.asprintf_append (" %s ", operator_glsl_strs[ir->operation]);
+		buffer.asprintf_append ("%s", operator_glsl_strs[ir->operation]);
 
 		if (ir->operands[1])
 			ir->operands[1]->accept(this);
@@ -707,13 +743,13 @@ void ir_print_glsl_visitor::visit(ir_expression *ir)
 	else
 	{
 		// ternary op
-		buffer.asprintf_append ("%s (", operator_glsl_strs[ir->operation]);
+		buffer.asprintf_append ("%s(", operator_glsl_strs[ir->operation]);
 		if (ir->operands[0])
 			ir->operands[0]->accept(this);
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		if (ir->operands[1])
 			ir->operands[1]->accept(this);
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		if (ir->operands[2])
 			ir->operands[2]->accept(this);
 		buffer.asprintf_append (")");
@@ -731,18 +767,18 @@ static int tex_sampler_dim_size[] = {
 	1, 2, 3, 3, 2, 2, 2,
 };
 
-void ir_print_glsl_visitor::visit(ir_texture *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_texture *ir)
 {
 	glsl_sampler_dim sampler_dim = (glsl_sampler_dim)ir->sampler->type->sampler_dimensionality;
 	const bool is_shadow = ir->sampler->type->sampler_shadow;
 
 	int uv_dim=tex_sampler_dim_size[sampler_dim];
+
 	if(ir->coordinate != NULL)
 	{
 		const glsl_type* uv_type=ir->coordinate->type;
 		uv_dim=uv_type->vector_elements;
 	}
-
 	int sampler_uv_dim = tex_sampler_dim_size[sampler_dim];
 	if (is_shadow)
 		sampler_uv_dim += 1;
@@ -789,41 +825,41 @@ void ir_print_glsl_visitor::visit(ir_texture *ir)
 			buffer.asprintf_append ("ARB");
 	}
 	
-	buffer.asprintf_append (" (");
+	buffer.asprintf_append ("(");
 	
 	// sampler
 	ir->sampler->accept(this);
-	buffer.asprintf_append (", ");
+	buffer.asprintf_append (",");
 	
 	// texture coordinate
-	if(ir->coordinate!=NULL)
-	ir->coordinate->accept(this);
+	if(ir->coordinate != NULL)
+		ir->coordinate->accept(this);
 	
 	// lod bias
 	if (ir->op == ir_txb)
 	{
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		ir->lod_info.bias->accept(this);
 	}
 	
 	// lod
 	if (ir->op == ir_txl || ir->op == ir_txf)
 	{
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		ir->lod_info.lod->accept(this);
 	}
 	
 	// grad
 	if (ir->op == ir_txd)
 	{
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		ir->lod_info.grad.dPdx->accept(this);
-		buffer.asprintf_append (", ");
+		buffer.asprintf_append (",");
 		ir->lod_info.grad.dPdy->accept(this);
 	}
 	
    if (ir->offset != NULL) {
-      buffer.asprintf_append (", ");
+      buffer.asprintf_append (",");
       ir->offset->accept(this);
    }
     /*
@@ -868,7 +904,7 @@ void ir_print_glsl_visitor::visit(ir_texture *ir)
 }
 
 
-void ir_print_glsl_visitor::visit(ir_swizzle *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_swizzle *ir)
 {
    const unsigned swiz[4] = {
       ir->mask.x,
@@ -904,14 +940,14 @@ void ir_print_glsl_visitor::visit(ir_swizzle *ir)
 }
 
 
-void ir_print_glsl_visitor::visit(ir_dereference_variable *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_dereference_variable *ir)
 {
    ir_variable *var = ir->variable_referenced();
    print_var_name (var);
 }
 
 
-void ir_print_glsl_visitor::visit(ir_dereference_array *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_dereference_array *ir)
 {
    ir->array->accept(this);
    buffer.asprintf_append ("[");
@@ -920,14 +956,14 @@ void ir_print_glsl_visitor::visit(ir_dereference_array *ir)
 }
 
 
-void ir_print_glsl_visitor::visit(ir_dereference_record *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_dereference_record *ir)
 {
    ir->record->accept(this);
    buffer.asprintf_append (".%s", ir->field);
 }
 
 
-bool ir_print_glsl_visitor::try_print_array_assignment (ir_dereference* lhs, ir_rvalue* rhs)
+bool ir_print_minimize_glsl_visitor::try_print_array_assignment (ir_dereference* lhs, ir_rvalue* rhs)
 {
 	if (this->state->language_version >= 120)
 		return false;
@@ -956,7 +992,7 @@ bool ir_print_glsl_visitor::try_print_array_assignment (ir_dereference* lhs, ir_
 	return true;
 }
 
-void ir_print_glsl_visitor::emit_assignment_part (ir_dereference* lhs, ir_rvalue* rhs, unsigned write_mask, ir_rvalue* dstIndex)
+void ir_print_minimize_glsl_visitor::emit_assignment_part (ir_dereference* lhs, ir_rvalue* rhs, unsigned write_mask, ir_rvalue* dstIndex)
 {
 	lhs->accept(this);
 	
@@ -1000,7 +1036,7 @@ void ir_print_glsl_visitor::emit_assignment_part (ir_dereference* lhs, ir_rvalue
 		hasWriteMask = true;
 	}
 	
-	buffer.asprintf_append (" = ");
+	buffer.asprintf_append ("=");
 	
 	bool typeMismatch = !dstIndex && (lhsType != rhsType);
 	const bool addSwizzle = hasWriteMask && typeMismatch;
@@ -1024,7 +1060,7 @@ void ir_print_glsl_visitor::emit_assignment_part (ir_dereference* lhs, ir_rvalue
 
 // Try to print (X = X + const) as (X += const), mostly to satisfy
 // OpenGL ES 2.0 loop syntax restrictions.
-static bool try_print_increment (ir_print_glsl_visitor* vis, ir_assignment* ir)
+static bool try_print_increment (ir_print_minimize_glsl_visitor* vis, ir_assignment* ir)
 {
 	if (ir->condition)
 		return false;
@@ -1069,7 +1105,7 @@ static bool try_print_increment (ir_print_glsl_visitor* vis, ir_assignment* ir)
 	}
 	else
 	{
-		vis->buffer.asprintf_append(" += ");
+		vis->buffer.asprintf_append("+=");
 		rhsConst->accept (vis);
 	}
 	
@@ -1077,7 +1113,7 @@ static bool try_print_increment (ir_print_glsl_visitor* vis, ir_assignment* ir)
 }
 
 
-void ir_print_glsl_visitor::visit(ir_assignment *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_assignment *ir)
 {
 	// if this is a loop induction variable initial assignment, and we aren't inside loop body:
 	// do not print it (will be printed when inside loop body)
@@ -1101,7 +1137,8 @@ void ir_print_glsl_visitor::visit(ir_assignment *ir)
 	{
 		assert (!this->globals->main_function_done);
 		this->globals->global_assignements.push_tail (new(this->globals->mem_ctx) ga_entry(ir));
-		buffer.asprintf_append ("//"); // for the ; that will follow (ugly, I know)
+		skipped_this_ir=true;
+//		buffer.asprintf_append ("//"); // for the ; that will follow (ugly, I know)
 		return;
 	}
 	
@@ -1126,7 +1163,7 @@ void ir_print_glsl_visitor::visit(ir_assignment *ir)
 		if (!skip_assign)
 		{
 			emit_assignment_part(ir->lhs, rhsOp->operands[0], ir->write_mask, NULL);
-			buffer.asprintf_append ("; ");
+			buffer.asprintf_append (";");
 		}
 		emit_assignment_part(ir->lhs, rhsOp->operands[1], ir->write_mask, rhsOp->operands[2]);
 		return;
@@ -1141,14 +1178,13 @@ void ir_print_glsl_visitor::visit(ir_assignment *ir)
    if (ir->condition)
    {
       ir->condition->accept(this);
-	  buffer.asprintf_append (" ");
+	  buffer.asprintf_append ("");
    }
 	
 	emit_assignment_part (ir->lhs, ir->rhs, ir->write_mask, NULL);
 }
 
-
-void print_float (string_buffer& buffer, float f)
+static void print_float (string_buffer& buffer, float f)
 {
 	// Kind of roundabout way, but this is to satisfy two things:
 	// * MSVC and gcc-based compilers differ a bit in how they treat float
@@ -1156,7 +1192,7 @@ void print_float (string_buffer& buffer, float f)
 	// * GLSL (early version at least) require floats to have ".0" or
 	//   exponential notation.
 	char tmp[64];
-	snprintf(tmp, 64, "%.7g", f);
+	snprintf(tmp, 64, "%.6g", f);
 
 	char* posE = NULL;
 	posE = strchr(tmp, 'e');
@@ -1200,7 +1236,7 @@ void print_float (string_buffer& buffer, float f)
 		buffer.asprintf_append(".0");
 }
 
-void ir_print_glsl_visitor::visit(ir_constant *ir)
+void ir_print_minimize_glsl_visitor::visit(ir_constant *ir)
 {
 	const glsl_type* type = ir->type;
 
@@ -1234,14 +1270,14 @@ void ir_print_glsl_visitor::visit(ir_constant *ir)
       for (unsigned i = 0; i < ir->type->length; i++)
       {
 	 if (i != 0)
-	    buffer.asprintf_append (", ");
+	    buffer.asprintf_append (",");
 	 ir->get_array_element(i)->accept(this);
       }
    } else if (ir->type->is_record()) {
       bool first = true;
       foreach_in_list(ir_constant, inst, &ir->components) {
 	 if (!first)
-	    buffer.asprintf_append (", ");
+	    buffer.asprintf_append (",");
 	 first = false;
 	 inst->accept(this);
      } 
@@ -1249,7 +1285,7 @@ void ir_print_glsl_visitor::visit(ir_constant *ir)
       bool first = true;
       for (unsigned i = 0; i < ir->type->components(); i++) {
 	 if (!first)
-	    buffer.asprintf_append (", ");
+	    buffer.asprintf_append (",");
 	 first = false;
 	 switch (base_type->base_type) {
 	 case GLSL_TYPE_UINT:
@@ -1274,7 +1310,7 @@ void ir_print_glsl_visitor::visit(ir_constant *ir)
 
 
 void
-ir_print_glsl_visitor::visit(ir_call *ir)
+ir_print_minimize_glsl_visitor::visit(ir_call *ir)
 {
 	// calls in global scope are postponed to main function
 	if (this->mode != kPrintGlslNone)
@@ -1288,14 +1324,14 @@ ir_print_glsl_visitor::visit(ir_call *ir)
 	if (ir->return_deref)
 	{
 		visit(ir->return_deref);
-		buffer.asprintf_append (" = ");		
+		buffer.asprintf_append ("=");		
 	}
 	
-   buffer.asprintf_append ("%s (", ir->callee_name());
+   buffer.asprintf_append ("%s(", ir->callee_name());
    bool first = true;
    foreach_in_list(ir_instruction, inst, &ir->actual_parameters) {
 	  if (!first)
-		  buffer.asprintf_append (", ");
+		  buffer.asprintf_append (",");
       inst->accept(this);
 	  first = false;
    }
@@ -1304,7 +1340,7 @@ ir_print_glsl_visitor::visit(ir_call *ir)
 
 
 void
-ir_print_glsl_visitor::visit(ir_return *ir)
+ir_print_minimize_glsl_visitor::visit(ir_return *ir)
 {
    buffer.asprintf_append ("return");
 
@@ -1317,7 +1353,7 @@ ir_print_glsl_visitor::visit(ir_return *ir)
 
 
 void
-ir_print_glsl_visitor::visit(ir_discard *ir)
+ir_print_minimize_glsl_visitor::visit(ir_discard *ir)
 {
    buffer.asprintf_append ("discard");
 
@@ -1329,42 +1365,45 @@ ir_print_glsl_visitor::visit(ir_discard *ir)
 
 
 void
-ir_print_glsl_visitor::visit(ir_if *ir)
+ir_print_minimize_glsl_visitor::visit(ir_if *ir)
 {
-   buffer.asprintf_append ("if (");
+   buffer.asprintf_append ("if(");
    ir->condition->accept(this);
 
-   buffer.asprintf_append (") {\n");
-	indentation++; previous_skipped = false;
+   buffer.asprintf_append ("){");
+//	indentation++; 
+	previous_skipped = false;
 
 
    foreach_in_list(ir_instruction, inst, &ir->then_instructions) {
-      indent();
+//      indent();
       inst->accept(this);
 	   end_statement_line();
    }
 
-   indentation--;
-   indent();
+//   indentation--;
+//   indent();
    buffer.asprintf_append ("}");
 
    if (!ir->else_instructions.is_empty())
    {
-	   buffer.asprintf_append (" else {\n");
-	   indentation++; previous_skipped = false;
+	   buffer.asprintf_append ("else{");
+//	   indentation++;
+	   previous_skipped = false;
 
 	   foreach_in_list(ir_instruction, inst, &ir->else_instructions) {
-		  indent();
+//		  indent();
 		  inst->accept(this);
 		   end_statement_line();
 	   }
-	   indentation--;
-	   indent();
+//	   indentation--;
+//	   indent();
 	   buffer.asprintf_append ("}");
    }
+   skipped_this_ir=true;
 }
 
-bool ir_print_glsl_visitor::can_emit_canonical_for (loop_variable_state *ls)
+bool ir_print_minimize_glsl_visitor::can_emit_canonical_for (loop_variable_state *ls)
 {
 	if (ls == NULL)
 		return false;
@@ -1383,7 +1422,7 @@ bool ir_print_glsl_visitor::can_emit_canonical_for (loop_variable_state *ls)
     return true;
 }
 
-bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
+bool ir_print_minimize_glsl_visitor::emit_canonical_for (ir_loop* ir)
 {
 	loop_variable_state* const ls = this->loopstate->get(ir);
 
@@ -1393,7 +1432,7 @@ bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
 	hash_table* terminator_hash = hash_table_ctor(0, hash_table_pointer_hash, hash_table_pointer_compare);
 	hash_table* induction_hash = hash_table_ctor(0, hash_table_pointer_hash, hash_table_pointer_compare);
 	
-	buffer.asprintf_append("for (");
+	buffer.asprintf_append("for(");
 	inside_loop_body = true;
 	
 	// emit loop induction variable declarations.
@@ -1408,17 +1447,17 @@ bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
 			ir_variable* var = indvar->var;
 			print_precision (var, var->type);
 			print_type(buffer, var->type, false);
-			buffer.asprintf_append (" ");
+			buffer.asprintf_append ("");
 			print_var_name (var);
 			print_type_post(buffer, var->type, false);
 			if (indvar->initial_value)
 			{
-				buffer.asprintf_append (" = ");
+				buffer.asprintf_append ("=");
 				indvar->initial_value->accept(this);
 			}
 		}
 	}
-	buffer.asprintf_append("; ");
+	buffer.asprintf_append(";");
 	
 	// emit loop terminating conditions
 	foreach_in_list(loop_terminator, term, &ls->terminators)
@@ -1448,7 +1487,7 @@ bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
 			if (termOp != NULL)
 			{
 				term_expr->operands[0]->accept(this);
-				buffer.asprintf_append(" %s ", termOp);
+				buffer.asprintf_append("%s", termOp);
 				term_expr->operands[1]->accept(this);
 				handled = true;
 			}
@@ -1469,7 +1508,7 @@ bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
 			buffer.asprintf_append(")");
 		}
 	}
-	buffer.asprintf_append("; ");
+	buffer.asprintf_append(";");
 	
 	// emit loop induction variable updates
 	bool first = true;
@@ -1477,11 +1516,11 @@ bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
 	{
 		hash_table_insert(induction_hash, indvar, indvar->first_assignment);
 		if (!first)
-			buffer.asprintf_append(", ");
+			buffer.asprintf_append(",");
 		visit(indvar->first_assignment);
 		first = false;
 	}
-	buffer.asprintf_append(") {\n");
+	buffer.asprintf_append("){");
 	
 	inside_loop_body = false;
 	
@@ -1513,12 +1552,12 @@ bool ir_print_glsl_visitor::emit_canonical_for (ir_loop* ir)
 
 
 void
-ir_print_glsl_visitor::visit(ir_loop *ir)
+ir_print_minimize_glsl_visitor::visit(ir_loop *ir)
 {
 	if (emit_canonical_for(ir))
 		return;
 	
-	buffer.asprintf_append ("while (true) {\n");
+	buffer.asprintf_append ("while(true){");
 	indentation++; previous_skipped = false;
 	foreach_in_list(ir_instruction, inst, &ir->body_instructions) {
 		indent();
@@ -1532,43 +1571,43 @@ ir_print_glsl_visitor::visit(ir_loop *ir)
 
 
 void
-ir_print_glsl_visitor::visit(ir_loop_jump *ir)
+ir_print_minimize_glsl_visitor::visit(ir_loop_jump *ir)
 {
    buffer.asprintf_append ("%s", ir->is_break() ? "break" : "continue");
 }
 
 void
-ir_print_glsl_visitor::visit(ir_precision_statement *ir)
+ir_print_minimize_glsl_visitor::visit(ir_precision_statement *ir)
 {
 	buffer.asprintf_append ("%s", ir->precision_statement);
 }
 
 void
-ir_print_glsl_visitor::visit(ir_typedecl_statement *ir)
+ir_print_minimize_glsl_visitor::visit(ir_typedecl_statement *ir)
 {
 	const glsl_type *const s = ir->type_decl;
-	buffer.asprintf_append ("struct %s {\n", s->name);
+	buffer.asprintf_append ("struct %s{", s->name);
 
 	for (unsigned j = 0; j < s->length; j++) {
-		buffer.asprintf_append ("  ");
+//		buffer.asprintf_append ("  ");
 		if (state->es_shader)
 			buffer.asprintf_append ("%s", get_precision_string(s->fields.structure[j].precision));
 		print_type(buffer, s->fields.structure[j].type, false);
 		buffer.asprintf_append (" %s", s->fields.structure[j].name);
 		print_type_post(buffer, s->fields.structure[j].type, false);
-		buffer.asprintf_append (";\n");
+		buffer.asprintf_append (";");
 	}
 	buffer.asprintf_append ("}");
 }
 
 void
-ir_print_glsl_visitor::visit(ir_emit_vertex *ir)
+ir_print_minimize_glsl_visitor::visit(ir_emit_vertex *ir)
 {
 	buffer.asprintf_append ("emit-vertex-TODO");
 }
 
 void
-ir_print_glsl_visitor::visit(ir_end_primitive *ir)
+ir_print_minimize_glsl_visitor::visit(ir_end_primitive *ir)
 {
 	buffer.asprintf_append ("end-primitive-TODO");
 }
