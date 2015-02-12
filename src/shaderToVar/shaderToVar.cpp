@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string>
 #include <algorithm>
+#include <vector>
 
 #include "..\getopt\getopt.h"
 #include "..\glsl\glsl_optimizer.h"
@@ -19,6 +20,8 @@ enum ConversionType
 	optimize
 };
 
+std::vector<std::string> g_includeFiles;
+
 void convertFile(ConversionType type, std::string inputFile, std::string outputFile);
 void copyToVar(std::string inputFile, std::string outputFile, bool removeComments=false);
 void minifyShader(std::string inputFile, std::string outputFile, bool optimize, glslopt_target target, glslopt_shader_type type);
@@ -31,7 +34,7 @@ int main(int argc, char *argv[])
 	char *outputFile=nullptr;
 	ConversionType conversionType=copy;
 
-	while((c=getopt(argc, argv, "c:i:o:"))!=-1)
+	while((c=getopt(argc, argv, "c:i:o:a:"))!=-1)
 	{
 		switch(c)
 		{
@@ -56,6 +59,9 @@ int main(int argc, char *argv[])
 				errors++;
 			}
 			break;
+		case 'a':
+			g_includeFiles.push_back(optarg);
+			break;
 		case ':':
 			switch(optopt)
 			{
@@ -67,6 +73,9 @@ int main(int argc, char *argv[])
 				break;
 			case 'o':
 				printf("Option -o requires a file\n");
+				break;
+			case 'a':
+				printf("Option -p requires then name of file to add as #include \"filename\"\n");
 				break;
 			}
 			errors++;
@@ -89,7 +98,7 @@ int main(int argc, char *argv[])
 	if(errors>0)
 		return 0;
 
-	return 1;
+	return 0;
 }
 
 void convertFile(ConversionType type, std::string inputFile, std::string outputFile)
@@ -137,6 +146,13 @@ void copyToVar(std::string inputFile, std::string outputFile, bool removeComment
 
 	_splitpath(inputFile.c_str(), drive, dir, fileName, ext);
 
+	if(!g_includeFiles.empty())
+	{
+		for(std::string &includeFile:g_includeFiles)
+		{
+			fprintf(output, "#include \"%s\"\n", includeFile.c_str());
+		}
+	}
 	fprintf(output, "#include <string>\n\n");
 	fprintf(output, "std::string %s_%s(\n", fileName, &ext[1]);
 
@@ -256,6 +272,13 @@ void minifyShader(std::string inputFile, std::string outputFile, bool optimize, 
 
 		_splitpath(inputFile.c_str(), drive, dir, fileName, ext);
 
+		if(!g_includeFiles.empty())
+		{
+			for(std::string &includeFile:g_includeFiles)
+			{
+				fprintf(output, "#include \"%s\"\n", includeFile.c_str());
+			}
+		}
 		fprintf(output, "#include <string>\n");
 		fprintf(output, "std::string %s_%s(\"", fileName, &ext[1]);
 
