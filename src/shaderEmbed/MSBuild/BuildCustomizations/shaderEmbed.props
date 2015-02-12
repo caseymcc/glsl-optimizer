@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ShaderToVarPath Condition="'$(ShaderToVarPath)' == ''">$(SHADERTOVAR)</ShaderToVarPath>
+    <ExecutablePath Condition="'$(ExecutablePath)' == ''">$(ShaderToVarPath);$(PATH)</ExecutablePath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ShaderEmbedBuildBeforeTargets>Midl</ShaderEmbedBuildBeforeTargets>
+    <ShaderEmbedBuildAfterTargets>CustomBuild</ShaderEmbedBuildAfterTargets>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ShaderEmbed>
+      <NoLogo>true</NoLogo>
+      <EmbedFileName>$(IntDir)%(FileName).cxx</EmbedFileName>
+      <ExecutionDescription>Embeding Shader in file %(Identity)...</ExecutionDescription>
+    </ShaderEmbed>
+  </ItemDefinitionGroup>
+</Project>

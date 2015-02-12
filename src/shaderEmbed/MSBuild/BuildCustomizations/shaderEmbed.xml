@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ProjectSchemaDefinitions xmlns="http://schemas.microsoft.com/build/2009/properties" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <Rule Name="ConfigurationDirectories" DisplayName="Tool Directories" Order="8" PageTemplate="generic" Description="Tool search directories">
+    <Rule.Categories>
+      <Category Name="ToolDirs" DisplayName="Tool Paths" Description="Tool Paths" />
+    </Rule.Categories>
+    <Rule.DataSource>
+      <DataSource Persistence="ProjectFile" />
+    </Rule.DataSource>
+    <StringProperty Name="ShaderToVarPath" Category="ToolDirs" Subtype="folder" DisplayName="ShaderToVar Path" Description="Specify the directory where the shaderToVar executable resides. By default the environment variable SHADERTOVAR is read." />
+  </Rule>
+  <Rule Name="ShaderEmbed" PageTemplate="tool" DisplayName="Embed Shader" Order="200">
+    <Rule.DataSource>
+      <DataSource Persistence="ProjectFile" ItemType="ShaderEmbed" />
+    </Rule.DataSource>
+    <Rule.Categories>
+      <Category
+        Name="General">
+        <Category.DisplayName>
+          <sys:String>General</sys:String>
+        </Category.DisplayName>
+      </Category>
+    </Rule.Categories>
+    <EnumProperty Name="ShaderType" Category="General" DisplayName="Shader Type" Description="Identifies shader type, vertex or fragment 1234">
+      <EnumValue Name="0" DisplayName="Vertex" />
+      <EnumValue Name="1" DisplayName="Fragment" />
+    </EnumProperty>
+    <EnumProperty Name="Embed" Category="General" DisplayName="Embed" Description="Determines how file is embedded">
+      <EnumValue Name="0" DisplayName="As is" />
+      <EnumValue Name="1" DisplayName="Remove Comments" />
+      <EnumValue Name="2" DisplayName="Minify" />
+      <EnumValue Name="3" DisplayName="Optimize" />
+    </EnumProperty>
+    <StringProperty Name="EmbedFileName" Category="General" DisplayName="Embed File Name" Description="File name of file to embed to." />
+  </Rule>
+  <ItemType Name="ShaderEmbed" DisplayName="Shader File" />
+  <FileExtension Name="*.glsl" ContentType="ShaderEmbed" />
+  <FileExtension Name="*.frag" ContentType="ShaderEmbed" />
+  <FileExtension Name="*.vert" ContentType="ShaderEmbed" />
+  <ContentType Name="ShaderEmbed" DisplayName="Shader File" ItemType="ShaderEmbed" />
+</ProjectSchemaDefinitions>

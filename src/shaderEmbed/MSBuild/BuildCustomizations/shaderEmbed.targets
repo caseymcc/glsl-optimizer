@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <PropertyPageSchema Include="$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml" />
+      <AvailableItemName Include="ShaderEmbed">
+        <Targets>_ShaderEmbed</Targets>
+      </AvailableItemName>
+  </ItemGroup>
+  <PropertyGroup>
+    <ComputeCompileInputsTargets> 
+      $(ComputeCompileInputsTargets);
+      ComputeShaderEmbedOutput;
+    </ComputeCompileInputsTargets>
+  </PropertyGroup>
+<!--  <UsingTask TaskName="ShaderEmbed" TaskFactory="XamlTaskFactory" AssemblyName="Microsoft.Build.Tasks.v4.0, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <Task>$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml</Task>
+  </UsingTask>
+-->
+  <UsingTask AssemblyFile="$(MSBuildThisFileDirectory)\shaderEmbed.Build.CPPTasks.dll" TaskName="ShaderEmbed" />
+  <Target Name="_ShaderEmbed" BeforeTargets="$(ShaderEmbedBuildBeforeTargets)" AfterTargets="$(ShaderEmbedBuildAfterTargets)" Condition="'@(ShaderEmbed)' != ''"
+    Outputs="%(ShaderEmbed.EmbedFileName)"
+    Inputs="%(ShaderEmbed.Identity);%(ShaderEmbed.AdditionalDependencies);$(MSBuildProjectFile)"
+    DependsOnTargets="_SelectedFiles">
+    <ItemGroup Condition="'@(SelectedFiles)' != ''">
+      <ShaderEmbed Remove="@(ShaderEmbed)" Condition="'%(Identity)' != '@(SelectedFiles)'" />
+    </ItemGroup>
+    <ItemGroup>
+      <ShaderEmbed_tlog Include="%(ShaderEmbed.EmbedFileName)" Condition="'%(ShaderEmbed.EmbedFileName)' != '' and '%(ShaderEmbed.ExcludedFromBuild)' != 'true'">
+        <Source>@(ShaderEmbed, '|')</Source>
+      </ShaderEmbed_tlog>
+    </ItemGroup>
+    <ItemGroup>
+      <ShaderEmbed>
+        <PrecompiledHeaderFile Condition="'%(ClCompile.PrecompiledHeader)' == 'NotUsing'"></PrecompiledHeaderFile>
+        <PrecompiledHeaderFile Condition="'%(ClCompile.PrecompiledHeader)' != 'NotUsing'">%(ClCompile.PrecompiledHeaderFile)</PrecompiledHeaderFile>
+      </ShaderEmbed>
+    </ItemGroup>
+    <Message
+      Importance="High"
+      Text="%(ShaderEmbed.ExecutionDescription)" />
+    <Message
+      Importance="High"
+      Text="%(ClCompile.PrecompiledHeader)" />
+    <Message
+      Importance="High"
+      Text="%(ShaderEmbed.PrecompiledHeader)" />
+    <WriteLinesToFile
+      Condition="'@(ShaderEmbed_tlog)' != '' and '%(ShaderEmbed_tlog.ExcludedFromBuild)' != 'true'"
+      File="$(TLogLocation)$(ProjectName).write.1u.tlog"
+      Lines="^%(ShaderEmbed_tlog.Source);@(ShaderEmbed_tlog-&gt;'%(Fullpath)')"
+      Encoding="Unicode"/>
+    <ShaderEmbed
+      Condition="'@(ShaderEmbed)' != '' and '%(ShaderEmbed.ExcludedFromBuild)' != 'true'"
+      Sources="@(ShaderEmbed)"
+      ToolPath="$(ShaderToVarPath)"
+      EmbedFileName="%(ShaderEmbed.EmbedFileName)"
+      Embed="%(ShaderEmbed.Embed)"
+      PrecompiledHeaderFile="%(ShaderEmbed.PrecompiledHeaderFile)"
+    />
+  </Target>
+  <Target
+    Name="ComputeShaderEmbedOutput"
+    Condition="'@(ShaderEmbed)' != ''">
+    <ItemGroup>
+      <CLCompile Include="@(ShaderEmbed->Metadata('EmbedFileName')->Distinct()->ClearMetadata())" Condition="'%(ShaderEmbed.ExcludedFromBuild)' != 'true'"/>
+    </ItemGroup>
+  </Target>
+</Project>
+
+<!--  
+  Inputs="%(ShaderEmbed.Identity)" 
+  NoLogo="%(ShaderEmbed.NoLogo)"
+      CommandLineTemplate="%(ShaderEmbed.CommandLineTemplate)"
+      GeneratePreprocessedSourceListing="%(MASM.GeneratePreprocessedSourceListing)"
+      ListAllAvailableInformation="%(MASM.ListAllAvailableInformation)"
+      UseSafeExceptionHandlers="%(MASM.UseSafeExceptionHandlers)"
+      AddFirstPassListing="%(MASM.AddFirstPassListing)"
+      EnableAssemblyGeneratedCodeListing="%(MASM.EnableAssemblyGeneratedCodeListing)"
+      DisableSymbolTable="%(MASM.DisableSymbolTable)"
+      EnableFalseConditionalsInListing="%(MASM.EnableFalseConditionalsInListing)"
+      TreatWarningsAsErrors="%(MASM.TreatWarningsAsErrors)"
+      MakeAllSymbolsPublic="%(MASM.MakeAllSymbolsPublic)"
+      GenerateDebugInformation="%(MASM.GenerateDebugInformation)"
+      EnableMASM51Compatibility="%(MASM.EnableMASM51Compatibility)"
+      PerformSyntaxCheckOnly="%(MASM.PerformSyntaxCheckOnly)"
+      ObjectFileName="%(MASM.ObjectFileName)"
+      PreprocessorDefinitions="%(MASM.PreprocessorDefinitions)"
+      AssembledCodeListingFile="%(MASM.AssembledCodeListingFile)"
+      IncludePaths="%(MASM.IncludePaths)"
+      BrowseFile="%(MASM.BrowseFile)"
+      PreserveIdentifierCase="%(MASM.PreserveIdentifierCase)"
+      WarningLevel="%(MASM.WarningLevel)"
+      PackAlignmentBoundary="%(MASM.PackAlignmentBoundary)"
+      CallingConvention="%(MASM.CallingConvention)"
+      ErrorReporting="%(MASM.ErrorReporting)"
+      AdditionalOptions="%(MASM.AdditionalOptions)"
+-->

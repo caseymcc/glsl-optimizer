@@ -21,7 +21,7 @@
     <ClCompile Include="..\..\src\getopt\getopt_long.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\shaderToVar\shaderToVar.cpp">
+    <ClCompile Include="..\..\src\shaderEmbed\shaderToVar.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

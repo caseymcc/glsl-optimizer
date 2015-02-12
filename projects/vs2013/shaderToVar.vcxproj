@@ -85,7 +85,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\getopt\getopt_long.c" />
-    <ClCompile Include="..\..\src\shaderToVar\shaderToVar.cpp" />
+    <ClCompile Include="..\..\src\shaderEmbed\shaderToVar.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\getopt\getopt.h" />
