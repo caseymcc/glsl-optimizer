@@ -11,7 +11,9 @@
   <ItemDefinitionGroup>
     <ShaderEmbed>
       <NoLogo>true</NoLogo>
-      <EmbedFileName>$(IntDir)%(FileName).cxx</EmbedFileName>
+      <ShaderType>0</ShaderType>
+      <Embed>0</Embed>
+      <EmbedFileName>$(IntDir)%(FileName)%(Extension).cxx</EmbedFileName>
       <ExecutionDescription>Embeding Shader in file %(Identity)...</ExecutionDescription>
     </ShaderEmbed>
   </ItemDefinitionGroup>

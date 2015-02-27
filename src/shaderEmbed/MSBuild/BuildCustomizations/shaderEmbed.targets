@@ -38,12 +38,6 @@
     <Message
       Importance="High"
       Text="%(ShaderEmbed.ExecutionDescription)" />
-    <Message
-      Importance="High"
-      Text="%(ClCompile.PrecompiledHeader)" />
-    <Message
-      Importance="High"
-      Text="%(ShaderEmbed.PrecompiledHeader)" />
     <WriteLinesToFile
       Condition="'@(ShaderEmbed_tlog)' != '' and '%(ShaderEmbed_tlog.ExcludedFromBuild)' != 'true'"
       File="$(TLogLocation)$(ProjectName).write.1u.tlog"

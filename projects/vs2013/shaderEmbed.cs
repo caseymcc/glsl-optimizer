@@ -216,7 +216,7 @@ namespace shaderEmbed.Build.CPPTasks
             }
             string commandLine;
                 
-            if(PrecompiledHeaderFile != "")
+            if((PrecompiledHeaderFile != null) && (PrecompiledHeaderFile != ""))
                 commandLine= "-a "+PrecompiledHeaderFile+" -c " + embedValue + " -i " + Sources[0] + " -o " + EmbedFileName;
             else
                 commandLine= "-c " + embedValue + " -i " + Sources[0] + " -o " + EmbedFileName;
